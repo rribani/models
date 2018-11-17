@@ -52,8 +52,8 @@ from utils import label_map_util
 from utils import visualization_utils as vis_util
 
 # Name of the directory containing the object detection module we're using
-MODEL_NAME = 'ssdlite_mobilenet_v2_coco_2018_05_09'
-#MODEL_NAME = 'ssd_mobilenet_v1_coco_2017_11_17'
+# MODEL_NAME = 'ssdlite_mobilenet_v2_coco_2018_05_09'
+MODEL_NAME = 'ssd_mobilenet_v1_coco_2017_11_17'
 
 # Grab path to current working directory
 CWD_PATH = os.getcwd()
@@ -193,32 +193,38 @@ elif camera_type == 'usb':
             feed_dict={image_tensor: frame_expanded})
 
         # Draw the results of the detection (aka 'visulaize the results')
-        vis_util.visualize_boxes_and_labels_on_image_array(
-           frame,
-           np.squeeze(boxes),
-           np.squeeze(classes).astype(np.int32),
-           np.squeeze(scores),
-           category_index,
-           use_normalized_coordinates=True,
-           line_thickness=8,
-           min_score_thresh=0.85)
+        # vis_util.visualize_boxes_and_labels_on_image_array(
+        #    frame,
+        #    np.squeeze(boxes),
+        #    np.squeeze(classes).astype(np.int32),
+        #    np.squeeze(scores),
+        #    category_index,
+        #    use_normalized_coordinates=True,
+        #    line_thickness=8,
+        #    min_score_thresh=0.85)
 
-        # print(classes)
-        cv2.putText(frame,"FPS: {0:.2f}".format(frame_rate_calc),(30,50),font,1,(255,255,0),2,cv2.LINE_AA)
-        # print("FPS: {0:.2f}".format(frame_rate_calc))
+        detected = [i for i in enumerate(np.squeeze(scores)) if i[1] >= 0.85]
+
+        os.system('cls' if os.name == 'nt' else 'clear')
+        print("Detected objects:")
+        for item in detected:
+            print("{0}, {1:.2f}%".format(category_index[np.squeeze(classes)[item[0]]], item[1]*100))
+
+        # cv2.putText(frame,"FPS: {0:.2f}".format(frame_rate_calc),(30,50),font,1,(255,255,0),2,cv2.LINE_AA)
+        print("FPS: {0:.2f}".format(frame_rate_calc))
 
         # All the results have been drawn on the frame, so it's time to display it.
-        cv2.imshow('Object detector', frame)
+        # cv2.imshow('Object detector', frame)
 
         t2 = cv2.getTickCount()
         time1 = (t2-t1)/freq
         frame_rate_calc = 1/time1
 
         # Press 'q' to quit
-        if cv2.waitKey(1) == ord('q'):
-           break
+        # if cv2.waitKey(1) == ord('q'):
+        #    break
 
     camera.release()
 
-cv2.destroyAllWindows()
+# cv2.destroyAllWindows()
 
