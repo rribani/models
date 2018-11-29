@@ -27,6 +27,9 @@ import numpy as np
 import tensorflow as tf
 import argparse
 import sys
+import serial
+import time
+
 
 # Set up camera constants
 IM_WIDTH = 1280
@@ -52,8 +55,11 @@ from utils import label_map_util
 from utils import visualization_utils as vis_util
 
 # Name of the directory containing the object detection module we're using
+# MODEL_NAME = 'ssd_mobilenet_v1_coco_2018_01_28'
+# MODEL_NAME = 'ssd_mobilenet_v2_coco_2018_03_29'
 # MODEL_NAME = 'ssdlite_mobilenet_v2_coco_2018_05_09'
-MODEL_NAME = 'ssd_mobilenet_v1_coco_2018_01_28'
+# MODEL_NAME = 'faster_rcnn_resnet101_coco_2018_01_28'
+MODEL_NAME = 'mask_rcnn_resnet101_atrous_coco_2018_01_28'
 
 # Grab path to current working directory
 CWD_PATH = os.getcwd()
@@ -110,6 +116,24 @@ num_detections = detection_graph.get_tensor_by_name('num_detections:0')
 frame_rate_calc = 1
 freq = cv2.getTickFrequency()
 font = cv2.FONT_HERSHEY_SIMPLEX
+
+# aaa
+# GUI
+show_gui = False
+# Serial
+send_to_serial = False
+if send_to_serial:
+    ser = serial.Serial('/dev/tty.usbmodemFD121', 9600)
+    empty = bytes.fromhex("3c010101010101010101013e")
+    obj1 = bytes.fromhex("3cFFFF01010101010101013e")
+    obj2 = bytes.fromhex("3c0101FFFF0101010101013e")
+    obj3 = bytes.fromhex("3c01010101FFFF010101013e")
+    obj4 = bytes.fromhex("3c010101010101FFFF01013e")
+    # empty = '<' + chr(1) + chr(1) + chr(1) + chr(1) + chr(1) + chr(1) + chr(1) + chr(1) + '>'
+    # obj1 = '<' + chr(255) + chr(255) + chr(1) + chr(1) + chr(1) + chr(1) + chr(1) + chr(1) + '>'
+    # obj2 = '<' + chr(1) + chr(1) + chr(255) + chr(255) + chr(1) + chr(1) + chr(1) + chr(1) + '>'
+    # obj3 = '<' + chr(1) + chr(1) + chr(1) + chr(1) + chr(255) + chr(255) + chr(1) + chr(1) + '>'
+    # obj4 = '<' + chr(1) + chr(1) + chr(1) + chr(1) + chr(1) + chr(1) + chr(255) + chr(255) + '>'
 
 # Initialize camera and perform object detection.
 # The camera has to be set up and used differently depending on if it's a
@@ -178,6 +202,9 @@ elif camera_type == 'usb':
     ret = camera.set(3,IM_WIDTH)
     ret = camera.set(4,IM_HEIGHT)
 
+    count = 0
+    sum_fps = 0
+
     while(True):
 
         t1 = cv2.getTickCount()
@@ -193,38 +220,136 @@ elif camera_type == 'usb':
             feed_dict={image_tensor: frame_expanded})
 
         # Draw the results of the detection (aka 'visulaize the results')
-        # vis_util.visualize_boxes_and_labels_on_image_array(
-        #    frame,
-        #    np.squeeze(boxes),
-        #    np.squeeze(classes).astype(np.int32),
-        #    np.squeeze(scores),
-        #    category_index,
-        #    use_normalized_coordinates=True,
-        #    line_thickness=8,
-        #    min_score_thresh=0.85)
+        if show_gui:
+            vis_util.visualize_boxes_and_labels_on_image_array(
+               frame,
+               np.squeeze(boxes),
+               np.squeeze(classes).astype(np.int32),
+               np.squeeze(scores),
+               category_index,
+               use_normalized_coordinates=True,
+               line_thickness=8,
+               min_score_thresh=0.85)
 
         detected = [i for i in enumerate(np.squeeze(scores)) if i[1] >= 0.85]
 
         os.system('cls' if os.name == 'nt' else 'clear')
         print("Detected objects:")
         for item in detected:
-            print("{0}, {1:.2f}%".format(category_index[np.squeeze(classes)[item[0]]], item[1]*100))
+            # Class
+            id_class = np.squeeze(classes)[item[0]]
+            print("{0}, {1:.2f}%".format(category_index[id_class], item[1]*100))
 
-        # cv2.putText(frame,"FPS: {0:.2f}".format(frame_rate_calc),(30,50),font,1,(255,255,0),2,cv2.LINE_AA)
+            # Positions of bbox
+            box = np.squeeze(boxes)[item[0]]
+            top = box[0]
+            left = box[1]
+            bottom = box[2]
+            right = box[3]
+            print("box: {}".format(box))
+
+            if send_to_serial:
+                # Map position to vest
+                rows = 4
+                cols = 2
+                vest_activation_position = np.ones([rows, cols])
+                position = "3c" # FFFF01010101010101013e
+                for row in range(0, rows):
+                    for col in range(0, cols):
+                        q_x1 = (1 / cols) * col;
+                        q_y1 = (1 / rows) * row;
+                        q_x2 = (1 / cols) * (col + 1);
+                        q_y2 = (1 / rows) * (row + 1);
+
+                        if q_x1 > left:
+                            x1 = q_x1;
+                        else:
+                            x1 = left;
+
+                        if q_y1 > top:
+                            y1 = q_y1;
+                        else:
+                            y1 = top;
+
+                        if q_x2 > right:
+                            x2 = right;
+                        else:
+                            x2 = q_x2;
+
+                        if q_y2 > bottom:
+                            y2 = bottom;
+                        else:
+                            y2 = q_y2;
+
+                        # percent of the detected object in the quadrant
+                        image_area_in_quadrant = (x2 - x1) * (y2 - y1)
+                        image_area = (right - left) * (bottom - top)
+                        if image_area_in_quadrant > 0:
+                            value = (image_area_in_quadrant / image_area) * 255.0
+                            if int(value) == 0:
+                                value = 1
+                            vest_activation_position[row][col] = value
+                        position = position + str(hex(int(vest_activation_position[row][col]))).replace('0x','')
+                position = position + "3e"
+
+                # write class to serial
+                # bottle
+                if id_class == 44:
+                    print("Writing obj to serial: {}".format(obj1))
+                    ser.write(obj1)
+                # cup
+                if id_class == 47:
+                    print("Writing obj to serial: {}".format(obj2))
+                    ser.write(obj2)
+                # scissors
+                if id_class == 87:
+                    print("Writing obj to serial: {}".format(obj3))
+                    ser.write(obj3)
+                # keyboard
+                if id_class == 76:
+                    print("Writing obj to serial: {}".format(obj4))
+                    ser.write(obj4)
+
+                # write position to serial
+                if id_class == 44 or id_class == 47 or id_class == 87 or id_class == 76:
+                    time.sleep(0.2)
+                    ser.write(empty)
+                    time.sleep(0.2)
+                    print("Writing position to serial: {}".format(bytes.fromhex(position)))
+                    ser.write(bytes.fromhex(position))
+                    time.sleep(0.2)
+                    ser.write(empty)
+                    time.sleep(0.2)
+
+        if show_gui:
+            cv2.putText(frame,"FPS: {0:.2f}".format(frame_rate_calc),(30,50),font,1,(255,255,0),2,cv2.LINE_AA)
         print("FPS: {0:.2f}".format(frame_rate_calc))
 
         # All the results have been drawn on the frame, so it's time to display it.
-        # cv2.imshow('Object detector', frame)
+        if show_gui:
+            cv2.imshow('Object detector', frame)
 
         t2 = cv2.getTickCount()
         time1 = (t2-t1)/freq
         frame_rate_calc = 1/time1
 
+        count = count + 1
+        sum_fps = sum_fps + frame_rate_calc
+
+        if count == 30:
+            break
+
         # Press 'q' to quit
-        # if cv2.waitKey(1) == ord('q'):
-        #    break
+        if show_gui:
+            if cv2.waitKey(1) == ord('q'):
+                break
 
     camera.release()
 
-# cv2.destroyAllWindows()
+    print("FPS Avg: {0:.2f}".format(sum_fps/count))
+
+if send_to_serial:
+    ser.close()
+if show_gui:
+    cv2.destroyAllWindows()
 
