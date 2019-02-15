@@ -55,11 +55,11 @@ from utils import label_map_util
 from utils import visualization_utils as vis_util
 
 # Name of the directory containing the object detection module we're using
-# MODEL_NAME = 'ssd_mobilenet_v1_coco_2018_01_28'
+MODEL_NAME = 'ssd_mobilenet_v1_coco_2018_01_28'
 # MODEL_NAME = 'ssd_mobilenet_v2_coco_2018_03_29'
 # MODEL_NAME = 'ssdlite_mobilenet_v2_coco_2018_05_09'
 # MODEL_NAME = 'faster_rcnn_resnet101_coco_2018_01_28'
-MODEL_NAME = 'mask_rcnn_resnet101_atrous_coco_2018_01_28'
+# MODEL_NAME = 'mask_rcnn_resnet101_atrous_coco_2018_01_28'
 
 # Grab path to current working directory
 CWD_PATH = os.getcwd()
@@ -119,9 +119,9 @@ font = cv2.FONT_HERSHEY_SIMPLEX
 
 # aaa
 # GUI
-show_gui = False
+show_gui = True
 # Serial
-send_to_serial = False
+send_to_serial = True
 if send_to_serial:
     ser = serial.Serial('/dev/tty.usbmodemFD121', 9600)
     empty = bytes.fromhex("3c010101010101010101013e")
@@ -314,12 +314,12 @@ elif camera_type == 'usb':
                 if id_class == 44 or id_class == 47 or id_class == 87 or id_class == 76:
                     time.sleep(0.2)
                     ser.write(empty)
-                    time.sleep(0.2)
-                    print("Writing position to serial: {}".format(bytes.fromhex(position)))
-                    ser.write(bytes.fromhex(position))
-                    time.sleep(0.2)
-                    ser.write(empty)
-                    time.sleep(0.2)
+                    # time.sleep(0.2)
+                    # print("Writing position to serial: {}".format(bytes.fromhex(position)))
+                    # ser.write(bytes.fromhex(position))
+                    # time.sleep(0.2)
+                    # ser.write(empty)
+                    # time.sleep(0.2)
 
         if show_gui:
             cv2.putText(frame,"FPS: {0:.2f}".format(frame_rate_calc),(30,50),font,1,(255,255,0),2,cv2.LINE_AA)
@@ -336,8 +336,8 @@ elif camera_type == 'usb':
         count = count + 1
         sum_fps = sum_fps + frame_rate_calc
 
-        if count == 30:
-            break
+        # if count == 30:
+        #     break
 
         # Press 'q' to quit
         if show_gui:
